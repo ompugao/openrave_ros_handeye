@@ -1,0 +1,68 @@
+<KinBody name="calibboard">
+	<Body name="attachment" type="dynamic">
+		<Mass type="mimicgeom">
+			<total>0.065</total>
+			<inertia>0.027196116 0 0.010111903 0.187200 0.000001.322 -0.010111903 0.000001322 0.211700</inertia>
+			<com>0.038696 0.014 0.00362</com>
+		</Mass>
+		<Geom type="trimesh">
+			<Render>calibboard_attachment.stl 0.001</Render>
+			<collision>calibboard_attachment.stl 0.001</collision>
+			<Translation>0 0 0</Translation>
+		</Geom>
+	</Body>
+
+	<Body name="base" type="dynamic">
+		<Translation>0.07 0 0.008</Translation>
+		<RotationAxis>0 0 1 90</RotationAxis>
+		<offsetfrom>attachment</offsetfrom>
+		<Mass type="mimicgeom">
+			<total>0.580</total>
+			<inertia>10 0 0 13 0 0 0 2.8</inertia>
+			<com>0.00 0.004563 0.119369</com>
+		</Mass>
+		<Geom type="trimesh">
+			<Render>calibboard_onhand.stl 0.001</Render>
+			<collision>calibboard_onhand.stl 0.001</collision>
+			<Translation>0 0 0</Translation>
+		</Geom>
+	</Body>
+
+	<Body name="pattern" type="dynamic">
+		<Translation>0 0 0.13</Translation>
+		<RotationAxis>1 0 0 90</RotationAxis>
+		<offsetfrom>base</offsetfrom>
+		<Mass type="mimicgeom">
+			<density>1000</density>
+		</Mass>
+		<Geom type="box">
+			<Extents>0.125 0.1 0.001</Extents>
+			<!--<RotationAxis>1 0 0 90</RotationAxis>-->
+			<!--<Translation>0 0 0.13</Translation>-->
+			<diffuseColor>0.5 0.7 0.8</diffuseColor>
+		</Geom>
+		<collision></collision>
+	</Body>
+
+    <joint name="joint_attachment_base" type="hinge" enable="false">
+      <body>attachment</body>
+      <body>base</body>
+      <limits>0 0</limits>
+    </joint>
+    <joint name="joint_base_pattern" type="hinge" enable="false">
+      <body>base</body>
+      <body>pattern</body>
+      <limits>0 0</limits>
+    </joint>
+
+	<!--
+	<Joint name="dummy" type="hinge">
+		<Body>Body1</Body>
+		<Body>Body2</Body>
+		<Anchor>0 0 0</Anchor>
+		<Axis>0 1 0</Axis>
+		<Weight>1.0</Weight>
+		<maxtorque>10</maxtorque>
+	</Joint>
+	-->
+</KinBody> 

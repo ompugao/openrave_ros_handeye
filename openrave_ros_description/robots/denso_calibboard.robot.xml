@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Robot name="denso_calibboard">
+  <!-- Include the robots -->
+  <Robot file="denso_vs060.dae"></Robot>
+  <Kinbody file="../objects/calibboard_onhand.kinbody.xml">
+    <body name="attachment">
+      <offsetfrom>link6</offsetfrom>
+    </body>
+    <joint name="joint_denso_attachment" type="hinge" enable="false">
+      <body>link6</body>
+      <body>attachment</body>
+      <limits>0 0</limits>
+    </joint>
+  </Kinbody>
+  
+  <!-- Define the manipulator -->
+  <!--
+  <Manipulator name="calibboard">
+    <base>link0</base>
+    <effector>pattern</effector>
+    <translation>0 0 0</translation>
+    <joints></joints>
+  </Manipulator>
+  -->
+</Robot>
+

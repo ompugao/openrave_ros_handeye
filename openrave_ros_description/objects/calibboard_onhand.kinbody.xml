@@ -1,6 +1,6 @@
 <KinBody name="calibboard">
 	<Body name="attachment" type="dynamic">
-		<Mass type="mimicgeom">
+		<Mass type="custom">
 			<total>0.065</total>
 			<inertia>0.027196116 0 0.010111903 0.187200 0.000001.322 -0.010111903 0.000001322 0.211700</inertia>
 			<com>0.038696 0.014 0.00362</com>
@@ -16,7 +16,7 @@
 		<Translation>0.07 0 0.008</Translation>
 		<RotationAxis>0 0 1 90</RotationAxis>
 		<offsetfrom>attachment</offsetfrom>
-		<Mass type="mimicgeom">
+		<Mass type="custom">
 			<total>0.580</total>
 			<inertia>10 0 0 13 0 0 0 2.8</inertia>
 			<com>0.00 0.004563 0.119369</com>
@@ -54,15 +54,4 @@
       <body>pattern</body>
       <limits>0 0</limits>
     </joint>
-
-	<!--
-	<Joint name="dummy" type="hinge">
-		<Body>Body1</Body>
-		<Body>Body2</Body>
-		<Anchor>0 0 0</Anchor>
-		<Axis>0 1 0</Axis>
-		<Weight>1.0</Weight>
-		<maxtorque>10</maxtorque>
-	</Joint>
-	-->
 </KinBody> 

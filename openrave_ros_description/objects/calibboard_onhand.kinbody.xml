@@ -6,8 +6,8 @@
 			<com>0.038696 0.014 0.00362</com>
 		</Mass>
 		<Geom type="trimesh">
-			<Render>calibboard_attachment.stl 0.001</Render>
-			<collision>calibboard_attachment.stl 0.001</collision>
+			<Render>calibboard_attachment_thick.stl 0.001</Render>
+			<collision>calibboard_attachment_thick.stl 0.001</collision>
 			<Translation>0 0 0</Translation>
 		</Geom>
 	</Body>

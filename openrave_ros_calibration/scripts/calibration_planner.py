@@ -6,6 +6,7 @@ import time
 import threading
 import cv2
 import handeye
+import pickle
 
 from cv_bridge import CvBridge
 
@@ -44,8 +45,7 @@ class OpenRAVECalibrationPlanner(object):
             time.sleep(1.0)
 
 
-class CalibrationTaskController(object  ):
-
+class CalibrationTaskController(object):
     def __init__(self, ):
         envfile = rospy.get_param('~collada_file')
         robotname = rospy.get_param('~robot')
@@ -94,6 +94,8 @@ class CalibrationTaskController(object  ):
             P = obs['Tpatternincamera']
             calibrator.add_sample(Q, P)
         Xhat = calibrator.solve(method=handeye.solver.ParkBryan1994)
+        rotation_rmse, translation_rmse = calibrator.compute_reprojection_error(Xhat)
+        return Xhat, rotation_rmse, translation_rmse
 
     def gather_observations(self, dists=np.arange(0.03,1.5,0.2), orientationdensity=5, num=np.inf):
         poses, configs = self.calibplanner.computePoses(self, dists=dists, orientationdensity=orientationdensity, num=num)
@@ -101,7 +103,7 @@ class CalibrationTaskController(object  ):
         for pose, config in zip(poses, configs):
             self.calibplanner.moveTo(config)
             # wait for vibration deminishing...
-            time.sleep(3.0)
+            time.sleep(1.0)
             Tpattern_in_camera = self.capture_corners()
             if Tpattern_in_camera is None:
                 continue
@@ -113,6 +115,10 @@ class CalibrationTaskController(object  ):
             observations.append(d)
         return observations
 
+
+    def save_observations(self, observations, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(observations, f)
 
     def capture_corners(self, ):
         checkerboard = (6, 9)
@@ -145,10 +151,9 @@ class CalibrationTaskController(object  ):
         return T
 
 
-
-
 if __name__ == '__main__':
     rospy.init_node('openrave_calibration_planner')
-    # self.viewVisibleConfigurations(poses, configs)
+    self = CalibrationTaskController()
+
     from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
 

@@ -110,7 +110,9 @@ if __name__ == '__main__':
     target = robot.GetLink('pattern')
     self = CalibrationViews(robot=robot, sensorname=sensorname, sensorrobot=sensorrobot, target=target)
     poses, configs = self.computevisibilityposes(dists=np.arange(0.03,1.5,0.2), orientationdensity=5, num=1000)
-    self.viewVisibleConfigurations(poses, configs)
+    # self.viewVisibleConfigurations(poses, configs)
+    sensor = self.vmodel.attachedsensor.GetSensor()
+    camerageom = sensor.GetSensorGeometry(Sensor.Type.Camera)
     from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
 
 

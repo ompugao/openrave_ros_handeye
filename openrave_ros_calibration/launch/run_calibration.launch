@@ -1,24 +1,31 @@
 <launch>
-	<arg name="realrobot" default="false"/>
+    <arg name="realrobot" default="false"/>
 
-	<group if="$(arg realrobot)">
-		<include file="$(find denso_control)/launch/joint_trajectory_controller.launch"/>
-		<include file="$(find denso_control)/launch/rc8_ros_driver.launch">
-			<arg name="ip" value="192.168.0.21"/>
-		</include>
-	</group>
+    <group if="$(arg realrobot)">
+        <include file="$(find denso_control)/launch/joint_trajectory_controller.launch"/>
+        <include file="$(find denso_control)/launch/rc8_ros_driver.launch">
+            <arg name="ip" value="192.168.0.21"/>
+        </include>
+    </group>
 
-	<!--
-	<include file="$(find azure_kinect_ros_driver)/launch/driver.launch">
-		<arg name="overwrite_robot_description" false=""/>
-	</include>
-	-->
+    <group ns="camera">
+        <include file="$(find azure_kinect_ros_driver)/launch/driver.launch">
+            <arg name="overwrite_robot_description" value="false"/>
+        </include>
+    </group>
 
-	<node pkg="openrave_ros_calibration" type="calibration_planner.py" name="calibration_planner" 
-			args="" respawn="false" output="screen">
-		<remap from="~input/image_rect" to="/camera/rgb_to_depth/image_raw"/> <!-- rectified -->
-		<remap from="~input/camera_info" to="/camera/rgb_to_depth/camera_info"/>
-		<remap from="~output/debug_image_calib" to="image_calib"/>
+    <node pkg="image_proc" type="image_proc" name="image_proc" ns="camera/rgb">
+        <!--
+        <remap from="camera_info" to="camera/rgb/camera_info" />
+        <remap from="image_mono" to="camera/rgb/image_raw" />
+        <remap from="image_rect" to="camera/rgb/image_rect" />
+        -->
+    </node>
+    <node pkg="openrave_ros_calibration" type="calibration_planner.py" name="calibration_planner" 
+            args="" respawn="false" output="screen">
+        <remap from="~input/image_rect" to="camera/rgb/image_rect"/> <!-- rectified -->
+        <remap from="~input/camera_info" to="camera/rgb/camera_info"/>
+        <remap from="~output/debug_image_calib" to="image_calib"/>
 
         <rosparam subst_value="True">
             collada_file: $(find openrave_ros_description)/worlds/denso_calib.env.xml
@@ -30,5 +37,5 @@
             viewer: qtosg
         </rosparam>
             <!-- controllerargs: "rosrobotcontroller /denso/position_trajectory_controller/follow_joint_trajectory /denso/joint_states 8 j1 j2 j3 j4 j5 j6" -->
-	</node>
+    </node>
 </launch>

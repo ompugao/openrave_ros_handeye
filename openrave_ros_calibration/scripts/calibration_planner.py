@@ -145,7 +145,7 @@ class CalibrationTaskController(object):
         if not success:
             return None
         T = np.eye(4)
-        T[0:3,0;3] = cv2.Rodrigues2(rotation_vector)
+        T[0:3,0:3] = cv2.Rodrigues2(rotation_vector)
         T[0:3,3] = translation_vector
 
         return T

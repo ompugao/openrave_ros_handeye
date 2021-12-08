@@ -1,0 +1,32 @@
+<launch>
+	<arg name="realrobot" default="false"/>
+
+	<group if="$(arg realrobot)">
+		<include file="$(find denso_control)/launch/joint_trajectory_controller.launch"/>
+		<include file="$(find denso_control)/launch/rc8_ros_driver.launch">
+			<arg name="ip" value="192.168.0.21"/>
+		</include>
+	</group>
+
+	<include file="$(find azure_kinect_ros_driver)/launch/driver.launch">
+		<arg name="overwrite_robot_description" false=""/>
+	</include>
+
+	<node pkg="openrave_ros_calibration" type="calibration_planner" name="calibration_planner" 
+			args="" respawn="false">
+		<remap from="~input/image_rect" to="/camera/..../image_rect_color"/>
+		<remap from="~input/camera_info" to="/camera/..../camera_info"/>
+		<remap from="~output/debug_image_calib" to="image_calib"/>
+
+		<rosparam>
+			collada_file: $(find openrave_ros_description)/worlds/denso_calib.env.xml
+			robot: Denso
+			manip: Flange
+			target: pattern
+			sensorrobot: azure_kinect
+			sensorname: rgb_camera
+			viewer: qtosg
+			controllerargs: "rosrobotcontroller /denso/position_trajectory_controller/follow_joint_trajectory /denso/joint_states 8 j1 j2 j3 j4 j5 j6"
+		</rosparam>
+	</node>
+</launch>

@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from __future__ import absolute_import
+
 import rospy
 from openravepy import *
 import numpy as np
@@ -7,26 +12,32 @@ import threading
 import cv2
 import handeye
 import pickle
+from calibrationviews import CalibrationViews
 
 from cv_bridge import CvBridge
 
 class OpenRAVECalibrationPlanner(object):
     def __init__(self, env, robotname, manipname,
-            targetname, sensorobotname, sensorname, viewername, controllerargs):
+            targetname, sensorrobotname, sensorname, viewername, controllerargs):
         self.env = env
+        if viewername is not None:
+            self.env.SetViewer(viewername)
         self.robot = self.env.GetRobot(robotname)
         if manipname is None:
             manipname = self.robot.GetActiveManipulator().GetName()
         self.manip = self.robot.GetManipulator(manipname)
+        self.robot.SetActiveManipulator(self.manip)
         self.sensorrobot = self.env.GetRobot(sensorrobotname)
-        self.sensorrobot.GetAttachedSensor(self.sensorname)
-        self.target = robot.GetLink(targetname)
+        self.sensorrobot.GetAttachedSensor(sensorname)
+        self.target = self.robot.GetLink(targetname)
 
-        if controllerargs is not None:
-            controller = RaveCreateController(self.env, controllerargs)
-            self.robot.SetController(controller, list(self.robot.GetActiveDOFIndices()), 0)
+        self.calibrationviews = CalibrationViews(robot=self.robot, sensorname=sensorname, sensorrobot=self.sensorrobot, target=self.target)
 
-        self.basemanip = interfaces.BaseManipulation(manip=self.manip)
+        # if controllerargs is not None:
+        #     controller = RaveCreateController(self.env, controllerargs)
+        #     self.robot.SetController(controller, list(self.robot.GetActiveDOFIndices()), 0)
+
+        self.basemanip = interfaces.BaseManipulation(robot=self.robot)
         lmodel = databases.linkstatistics.LinkStatisticsModel(self.robot)
         if not lmodel.load():
             lmodel.autogenerate()
@@ -34,9 +45,8 @@ class OpenRAVECalibrationPlanner(object):
         lmodel.setRobotResolutions()
         # ikmodel = databases.inversekinematics.InverseKinematicsModel(robot=self.robot, manip=self.manip, iktype=IkParameterizationType.Transform6D)
 
-    def computePoses(self, dists=np.arange(0.03,1.5,0.2), orientationdensity=5, num=np.inf):
-        self.calibrationviews = CalibrationViews(robot=self.robot, sensorname=self.sensorname, sensorrobot=self.sensorrobot, target=self.target)
-        poses, configs = self.computevisibilityposes(dists=dists, orientationdensity=orientationdensity, num=num)
+    def computePoses(self, dists=np.arange(0.03,1.5,0.2), orientationdensity=5, conedirangles=None, num=np.inf):
+        poses, configs = self.calibrationviews.computevisibilityposes(dists=dists, orientationdensity=orientationdensity, conedirangles=conedirangles, num=num)
         return poses, configs
 
     def moveTo(self, config):
@@ -52,13 +62,13 @@ class CalibrationTaskController(object):
         manipname = rospy.get_param('~manip', None)
         targetname = rospy.get_param('~target')
         sensorobotname = rospy.get_param('~sensorrobot')
-        self.sensorname = rospy.get_param('~sensorname')
+        sensorname = rospy.get_param('~sensorname')
         viewername = rospy.get_param('~viewer', 'qtosg')
         controllerargs = rospy.get_param('~controllerargs', None)
 
         env = Environment()
         env.Load(envfile)
-        self.calibplanner = OpenRAVECalibrationPlanner(self.env, robotname, manipname,
+        self.calibplanner = OpenRAVECalibrationPlanner(env, robotname, manipname,
             targetname, sensorobotname, sensorname, viewername, controllerargs)
 
         self.gray_image = None
@@ -69,7 +79,7 @@ class CalibrationTaskController(object):
         self.cv_bridge = CvBridge()
         self.image_sub = rospy.Subscriber("~input/image_rect", Image, self._image_callback)
         self.camera_info_sub = rospy.Subscriber("~input/camera_info", CameraInfo, self._camera_info_callback)
-        self.image_pub = rospy.Publisher("~output/debug_image_calib", Image)
+        self.image_pub = rospy.Publisher("~output/debug_image_calib", Image, queue_size=3)
 
 
     def _image_callback(self, msg):
@@ -97,8 +107,11 @@ class CalibrationTaskController(object):
         rotation_rmse, translation_rmse = calibrator.compute_reprojection_error(Xhat)
         return Xhat, rotation_rmse, translation_rmse
 
-    def gather_observations(self, dists=np.arange(0.03,1.5,0.2), orientationdensity=5, num=np.inf):
-        poses, configs = self.calibplanner.computePoses(self, dists=dists, orientationdensity=orientationdensity, num=num)
+    def compute_poses(self, dists=np.arange(0.03,1.5,0.2), orientationdensity=5, conedirangles=None, num=np.inf):
+        poses, configs = self.calibplanner.computePoses(dists=dists, orientationdensity=orientationdensity, conedirangles=conedirangles, num=num)
+        return poses, configs
+
+    def gather_observations(self, poses, configs):
         observations = []
         for pose, config in zip(poses, configs):
             self.calibplanner.moveTo(config)
@@ -154,6 +167,15 @@ class CalibrationTaskController(object):
 if __name__ == '__main__':
     rospy.init_node('openrave_calibration_planner')
     self = CalibrationTaskController()
-
+    numconedir = 3
+    tiltangle = np.deg2rad(30)
+    qaxistilters = np.array([quatFromAxisAngle(np.array([np.cos(i*2*np.pi/numconedir), np.sin(i*2*np.pi/numconedir), 0])*tiltangle) for i in range(numconedir)])
+    conedirangles = quatArrayTRotate(qaxistilters, np.array([0,0,1]))
+    # poses, configs = self.compute_poses(dists=np.arange(0.03,1.5,0.2), orientationdensity=5, conedirangles=conedirangles, num=np.inf)
+    # numobservations = 60
+    # indices = np.random.choice(len(poses), numobservations, replace=False)
+    # graphs = self.calibplanner.calibrationviews.visualizePoses(poses[indices])
+    # del graphs
+    # obs = self.gather_observations(poses[indices], configs[indices])
     from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
 

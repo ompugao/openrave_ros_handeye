@@ -36,7 +36,7 @@ class CalibrationViews(object):
             log.info('Assuming target \'%s\' is attached to %s'%(target.GetName(),self.vmodel.manip))
             self.Tpatternrobot = np.dot(np.linalg.inv(self.vmodel.targetlink.GetTransform()),self.vmodel.manip.GetEndEffectorTransform())
 
-    def computevisibilityposes(self,dists=np.arange(0.05,1.5,0.2),orientationdensity=1,num=np.inf):
+    def computevisibilityposes(self,dists=np.arange(0.05,1.5,0.2),orientationdensity=1,num=np.inf,conedirangles=None):
         """Computes robot poses using visibility information from the target.
 
         Sample the transformations of the camera. the camera x and y axes should always be aligned with the 
@@ -45,7 +45,7 @@ class CalibrationViews(object):
         with set_ode_collisionchecker(self.env):
             if not self.vmodel.has():
                 # nothing is loaded
-                self.vmodel.visibilitytransforms = self.vmodel.visualprob.ProcessVisibilityExtents(numrolls=8,sphere=[orientationdensity]+dists.tolist())
+                self.vmodel.visibilitytransforms = self.vmodel.visualprob.ProcessVisibilityExtents(numrolls=8,sphere=[orientationdensity]+dists.tolist(), conedirangles=conedirangles)
                 self.vmodel.preshapes = np.array([self.robot.GetDOFValues(self.vmodel.manip.GetGripperIndices())])
                 self.vmodel.preprocess()
             # if self.Tpatternrobot is not None:
@@ -87,8 +87,12 @@ class CalibrationViews(object):
                             pass
                 return np.array(poses), np.array(configs)
 
-    def viewVisibleConfigurations(self, poses, configs):
+    def visualizePoses(self, poses):
         graphs = [self.env.drawlinelist(np.array([pose[4:7],pose[4:7]+0.03*rotationMatrixFromQuat(pose[0:4])[0:3,2]]),1) for pose in poses]
+        return graphs
+
+    def viewVisibleConfigurations(self, poses, configs):
+        graphs = self.visualizePoses(poses)
         try:
             with self.robot:
                 for i,config in enumerate(configs):

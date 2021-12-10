@@ -76,7 +76,7 @@ class CalibrationTaskController(object):
         # t = obstacle1.GetTransform()
         # t[0:3,3] = [0.8,0.0,0.28]
         # obstacle1.SetTransform(t)
-        # obstacle1.SetVisible(False)
+        # obstacle1.SetVisible(True)
         # env.Add(obstacle1)
 
         self.calibplanner = OpenRAVECalibrationPlanner(env, robotname, manipname,
@@ -134,9 +134,10 @@ class CalibrationTaskController(object):
                 continue
             d = dict()
             d['Tpatternincamera'] = Tpattern_in_camera
-            d['Tmanipinbase'] = self.calibplanner.vmodel.manip.GetTransform()
+            d['Tmanipinbase'] = self.calibplanner.manip.GetTransform()
             d['config'] = config
             d['pose'] = pose
+            rospy.loginfo('pattern captured!')
             observations.append(d)
         return observations
 
@@ -148,23 +149,19 @@ class CalibrationTaskController(object):
     def _create_blob_detector(self, checkerboard):
         params = cv2.SimpleBlobDetector_Params()
 
-        # Filter by Area.
         params.filterByArea = True
         params.minArea = 200
-        params.maxArea = 10000
+        params.maxArea = 1800
 
         params.minDistBetweenBlobs = 20
 
-        # params.filterByColor = True
 
-        params.filterByCircularity = False
-        params.minCircularity = 0.2
-
+        params.filterByColor = True
         params.filterByConvexity = True
-        params.minConvexity = 0.87
-
-        # Filter by Inertia
-        params.filterByInertia = False
+        # params.minConvexity = 0.87
+        # params.filterByCircularity = False
+        params.minCircularity = 0.2
+        params.filterByInertia = True
         params.minInertiaRatio = 0.01
 
         detector = cv2.SimpleBlobDetector_create(params)
@@ -196,26 +193,40 @@ class CalibrationTaskController(object):
             if not ret:
                 return None
 
-            corners2 = cv2.cornerSubPix(self.gray_image, corners, (11, 11), (-1, -1), criteria)
+            # corners2 = cv2.cornerSubPix(self.gray_image, corners, (11, 11), (-1, -1), criteria)
+            corners2 = corners
 
             cv_calib_image = cv2.drawChessboardCorners(self.gray_image, checkerboard, corners2, ret)
-            self.image_pub.publish(self.cv_bridge.cv2_to_imgmsg(cv_calib_image, "bgr8"))
+            self.image_pub.publish(self.cv_bridge.cv2_to_imgmsg(cv_calib_image, "mono8"))
 
         # TODO should i use parameters saved in self.env?
         with self.caminfo_lock:
-            camera_matrix = np.array(self.cam_info.P).reshape(3,4)
-            success, rotation_vector, translation_vector = cv2.solvePnP(objp3d, corners2, camera_matrix, np.array(self.cam_info.distortion_coeffs), flags=0)
+            # camera_matrix = np.array(self.cam_info.P).reshape(3,4)
+            camera_matrix = np.array(self.cam_info.K).reshape(3,3)
+            success, rotation_vector, translation_vector = cv2.solvePnP(objp3d, corners2, camera_matrix, np.array(self.cam_info.D), flags=0)
         if not success:
             return None
         T = np.eye(4)
         dst, jacobian = cv2.Rodrigues(rotation_vector)
         T[0:3,0:3] = dst
-        T[0:3,3] = translation_vector.flatten(0
+        T[0:3,3] = translation_vector.flatten()
 
         if Toffset is not None:
             T = np.dot(T, np.linalg.inv(Toffset))
         return T
 
+
+def save_poses(filename, poses, configs):
+    d = dict()
+    d['poses'] = poses
+    d['configs'] = configs
+    with open(filename, 'wb') as f:
+        pickle.dump(d, f)
+
+def load_poses(filename):
+    with open(filename, 'rb') as f:
+        d = pickle.load(f)
+    return d['poses'], d['configs']
 
 if __name__ == '__main__':
     rospy.init_node('openrave_calibration_planner')
@@ -226,7 +237,7 @@ if __name__ == '__main__':
     conedirangles = quatArrayTRotate(qaxistilters, np.array([0,0,1]))
     # rospy.loginfo('computing poses')
     # poses, configs = self.compute_poses(dists=np.arange(0.03,1.5,0.2), orientationdensity=5, conedirangles=conedirangles, num=np.inf)
-    # numobservations = 60
+    # numobservations = 100
     # indices = np.random.choice(len(poses), numobservations, replace=False)
     # graphs = self.calibplanner.calibrationviews.visualizePoses(poses[indices])
     # rospy.loginfo('start gathering observations. are you ok? (press enter to start)')
@@ -236,11 +247,11 @@ if __name__ == '__main__':
     #     import sys
     #     sys.exit(0)
     # #obs = self.gather_observations(poses[indices], configs[indices])
+    # obs = self.gather_observations(poses[indices], configs[indices], checkerboard=checkerboard, pointdist=pointdist, Ttargetoffset=None)
     checkerboard = (4, 11)
     pointdist = 0.05
     Ttargetoffset = matrixFromAxisAngle(np.array([0,0,1]), np.pi)
     Ttargetoffset[0:3,3] = [(checkerboard[0]-1)*pointdist/2, (checkerboard[1]-1)/2*pointdist, 0]
-    # obs = self.gather_observations(poses[indices], configs[indices], checkerboard=checkerboard, pointdist=pointdist, Ttargetoffset=Ttargetoffset)
     # Xhat, rotation_rmse, translation_rmse = self.do_calibration(obs)
     from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
 

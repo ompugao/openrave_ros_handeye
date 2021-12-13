@@ -35,7 +35,7 @@
             sensorrobot: azure_kinect
             sensorname: rgb_camera
             viewer: qtosg
+            controllerargs: "rosrobotcontroller /denso/position_trajectory_controller/follow_joint_trajectory /denso/joint_states 8 j1 j2 j3 j4 j5 j6"
         </rosparam>
-            <!-- controllerargs: "rosrobotcontroller /denso/position_trajectory_controller/follow_joint_trajectory /denso/joint_states 8 j1 j2 j3 j4 j5 j6" -->
     </node>
 </launch>

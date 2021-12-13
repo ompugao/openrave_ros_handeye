@@ -33,7 +33,7 @@ class OpenRAVECalibrationPlanner(object):
 
         self.calibrationviews = CalibrationViews(robot=self.robot, sensorname=sensorname, sensorrobot=self.sensorrobot, target=self.target)
 
-        if controllerargs is not None:
+        if controllerargs is not None and len(controllerargs) > 0:
             controller = RaveCreateController(self.env, controllerargs)
             self.robot.SetController(controller, list(self.robot.GetActiveDOFIndices()), 0)
 
@@ -129,14 +129,22 @@ class CalibrationTaskController(object):
             self.calibplanner.moveTo(config)
             # wait for vibration deminishing...
             time.sleep(1.0)
-            Tpattern_in_camera = self.capture_corners(checkerboard=checkerboard, pointdist=pointdist, Toffset=Ttargetoffset)
+
+            img, cam_info = self.get_image()
+            Tpattern_in_camera = self.capture_corners(img, cam_info, checkerboard=checkerboard, pointdist=pointdist)
             if Tpattern_in_camera is None:
+                rospy.logwarn('pattern not detected')
                 continue
+            if Ttargetoffset is not None:
+                Tpattern_in_camera = np.dot(Tpattern_in_camera, np.linalg.inv(Ttargetoffset))
+
             d = dict()
             d['Tpatternincamera'] = Tpattern_in_camera
             d['Tmanipinbase'] = self.calibplanner.manip.GetTransform()
             d['config'] = config
-            d['pose'] = pose
+            d['patternpose'] = pose
+            d['image'] = img
+            d['caminfo'] = cam_info
             rospy.loginfo('pattern captured!')
             observations.append(d)
         return observations
@@ -146,12 +154,12 @@ class CalibrationTaskController(object):
         with open(filename, 'wb') as f:
             pickle.dump(observations, f)
 
-    def _create_blob_detector(self, checkerboard):
+    def _create_blob_detector(self, ):
         params = cv2.SimpleBlobDetector_Params()
 
         params.filterByArea = True
-        params.minArea = 200
-        params.maxArea = 1800
+        params.minArea = 180
+        params.maxArea = 2500
 
         params.minDistBetweenBlobs = 20
 
@@ -167,7 +175,15 @@ class CalibrationTaskController(object):
         detector = cv2.SimpleBlobDetector_create(params)
         return detector
 
-    def capture_corners(self, checkerboard = (6, 9), pointdist = 0.05, Toffset=None):
+    def get_image(self):
+        with self.image_lock:
+            img = self.gray_image.copy()
+        with self.caminfo_lock:
+            cam_info = self.cam_info
+
+        return img, cam_info
+
+    def capture_corners(self, img, cam_info, checkerboard = (6, 9), pointdist = 0.05):
         """
         param:
         checkerboard: numbers of dots on a calibration pattern
@@ -182,37 +198,37 @@ class CalibrationTaskController(object):
         # ref: https://github.com/code-iai/iai_kinect2/blob/master/kinect2_calibration/src/kinect2_calibration.cpp
         for r in range(checkerboard[0]):
             for c in range(checkerboard[1]):
-                objp3d[0, r*checkerboard[1]+c] = [(2*c + r%2)*pointdist, r*pointdist, 0]
+                objp3d[0, r*checkerboard[1]+c] = [r*pointdist, (2*c + r%2)*pointdist, 0]
 
-        with self.image_lock:
-            blobdetector = self._create_blob_detector(checkerboard)
-            ret, corners = cv2.findCirclesGrid(
-                                self.gray_image, checkerboard,
-                                flags = (cv2.CALIB_CB_FAST_CHECK | cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_ASYMMETRIC_GRID | cv2.CALIB_CB_CLUSTERING),
-                                blobDetector=blobdetector)
-            if not ret:
-                return None
+        # note: circles are not detected by feeding `checkerboard' somehow...
+        blobdetector = self._create_blob_detector()
+        ret, corners = cv2.findCirclesGrid(
+                            img, (checkerboard[1], checkerboard[0]),
+                            flags = (cv2.CALIB_CB_FAST_CHECK | cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_ASYMMETRIC_GRID | cv2.CALIB_CB_CLUSTERING),
+                            blobDetector=blobdetector)
+        if not ret:
+            return None
 
-            # corners2 = cv2.cornerSubPix(self.gray_image, corners, (11, 11), (-1, -1), criteria)
-            corners2 = corners
+        # corners2 = cv2.cornerSubPix(self.gray_image, corners, (11, 11), (-1, -1), criteria)
+        corners2 = corners
 
-            cv_calib_image = cv2.drawChessboardCorners(self.gray_image, checkerboard, corners2, ret)
-            self.image_pub.publish(self.cv_bridge.cv2_to_imgmsg(cv_calib_image, "mono8"))
+        cv_calib_image = cv2.drawChessboardCorners(cv2.cvtColor(img, cv2.COLOR_GRAY2BGR), checkerboard, corners2, ret)
+        self.image_pub.publish(self.cv_bridge.cv2_to_imgmsg(cv_calib_image, "bgr8"))
 
         # TODO should i use parameters saved in self.env?
-        with self.caminfo_lock:
-            # camera_matrix = np.array(self.cam_info.P).reshape(3,4)
-            camera_matrix = np.array(self.cam_info.K).reshape(3,3)
-            success, rotation_vector, translation_vector = cv2.solvePnP(objp3d, corners2, camera_matrix, np.array(self.cam_info.D), flags=0)
+        camera_matrix = np.array(cam_info.K).reshape(3,3)
+        # TODO: it is not necessary to set distortion_coeffs, since image is already rectified?
+        # distortion_coeffs = np.array(cam_info.D)
+        distortion_coeffs = np.array([])
+        success, rotation_vector, translation_vector = cv2.solvePnP(objp3d, corners2, camera_matrix, distortion_coeffs, flags=0)
         if not success:
             return None
+
         T = np.eye(4)
         dst, jacobian = cv2.Rodrigues(rotation_vector)
         T[0:3,0:3] = dst
         T[0:3,3] = translation_vector.flatten()
 
-        if Toffset is not None:
-            T = np.dot(T, np.linalg.inv(Toffset))
         return T
 
 
@@ -228,6 +244,11 @@ def load_poses(filename):
         d = pickle.load(f)
     return d['poses'], d['configs']
 
+def load_observations(filename):
+    with open(filename, 'rb') as f:
+        obs = pickle.load(f)
+    return obs
+
 if __name__ == '__main__':
     rospy.init_node('openrave_calibration_planner')
     self = CalibrationTaskController()
@@ -235,23 +256,30 @@ if __name__ == '__main__':
     tiltangle = np.deg2rad(30)
     qaxistilters = np.array([quatFromAxisAngle(np.array([np.cos(i*2*np.pi/numconedir), np.sin(i*2*np.pi/numconedir), 0])*tiltangle) for i in range(numconedir)])
     conedirangles = quatArrayTRotate(qaxistilters, np.array([0,0,1]))
-    # rospy.loginfo('computing poses')
-    # poses, configs = self.compute_poses(dists=np.arange(0.03,1.5,0.2), orientationdensity=5, conedirangles=conedirangles, num=np.inf)
-    # numobservations = 100
-    # indices = np.random.choice(len(poses), numobservations, replace=False)
-    # graphs = self.calibplanner.calibrationviews.visualizePoses(poses[indices])
-    # rospy.loginfo('start gathering observations. are you ok? (press enter to start)')
-    # c = raw_input('>')
-    # del graphs
-    # if c == 'n':
-    #     import sys
-    #     sys.exit(0)
-    # #obs = self.gather_observations(poses[indices], configs[indices])
-    # obs = self.gather_observations(poses[indices], configs[indices], checkerboard=checkerboard, pointdist=pointdist, Ttargetoffset=None)
-    checkerboard = (4, 11)
-    pointdist = 0.05
-    Ttargetoffset = matrixFromAxisAngle(np.array([0,0,1]), np.pi)
-    Ttargetoffset[0:3,3] = [(checkerboard[0]-1)*pointdist/2, (checkerboard[1]-1)/2*pointdist, 0]
-    # Xhat, rotation_rmse, translation_rmse = self.do_calibration(obs)
+    rospy.loginfo('computing poses')
+    poses, configs = self.compute_poses(dists=np.arange(0.03,1.5,0.2), orientationdensity=5, conedirangles=conedirangles, num=np.inf)
+    # poses, configs = load_poses('/workspace/denso_calib_poses.pkl')
+    numobservations = 100
+    indices = np.random.choice(len(poses), numobservations, replace=False)
+    graphs = self.calibplanner.calibrationviews.visualizePoses(poses[indices])
+    rospy.loginfo('start gathering observations. are you ok? (press enter to start)')
+    c = raw_input('>')
+    del graphs
+    if c == 'n':
+        import sys
+        sys.exit(0)
+
+    checkerboard = (11, 4)
+    #pointdist = 0.0375
+    pointdist = 0.0215
+    # Ttargetoffset = np.eye(4)
+    # Ttargetoffset[0:3,3] = [-(checkerboard[0]-1)*pointdist/2, -(checkerboard[1]-1)/2*pointdist, 0]
+    obs = self.gather_observations(poses[indices], configs[indices], checkerboard=checkerboard, pointdist=pointdist, Ttargetoffset=None)
+    # for o in obs:
+    #     o['Tpatternincamera'] = np.dot(o['Tpatternincamera'], np.linalg.inv(Ttargetoffset))
+    Xhat, rotation_rmse, translation_rmse = self.do_calibration(obs)
+    sensorrobot = self.calibplanner.env.GetRobot('azure_kinect')
+    sensorrobot.SetTransform(np.dot(Xhat, np.linalg.inv(sensorrobot.GetSensor('rgb_camera').GetRelativeTransform())))
     from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
 
+    RaveDestroy()

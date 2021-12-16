@@ -1,0 +1,23 @@
+<launch>
+	<arg name="realrobot" default="false"/>
+    <group if="$(arg realrobot)">
+        <include file="$(find denso_control)/launch/joint_trajectory_controller.launch"/>
+        <include file="$(find denso_control)/launch/rc8_ros_driver.launch">
+            <arg name="ip" value="192.168.0.21"/>
+        </include>
+    </group>
+
+    <group ns="camera">
+        <include file="$(find azure_kinect_ros_driver)/launch/driver.launch">
+            <arg name="overwrite_robot_description" value="false"/>
+        </include>
+    </group>
+
+    <node pkg="image_proc" type="image_proc" name="image_proc" ns="camera/rgb">
+        <!--
+        <remap from="camera_info" to="camera/rgb/camera_info" />
+        <remap from="image_mono" to="camera/rgb/image_raw" />
+        <remap from="image_rect" to="camera/rgb/image_rect" />
+        -->
+    </node>
+</launch>

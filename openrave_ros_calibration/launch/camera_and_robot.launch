@@ -9,6 +9,7 @@
 
     <group ns="camera">
         <include file="$(find azure_kinect_ros_driver)/launch/driver.launch">
+            <arg name="color_resolution" value="3072P"/>
             <arg name="overwrite_robot_description" value="false"/>
         </include>
     </group>

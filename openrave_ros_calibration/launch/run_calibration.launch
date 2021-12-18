@@ -6,7 +6,7 @@
 	</include>
     <node pkg="openrave_ros_calibration" type="calibration_planner.py" name="calibration_planner" 
             args="" respawn="false" output="screen">
-        <remap from="~input/image_rect" to="camera/rgb/image_rect"/> <!-- rectified -->
+        <remap from="~input/image_rect" to="camera/rgb/image_rect_color"/> <!-- rectified -->
         <remap from="~input/camera_info" to="camera/rgb/camera_info"/>
         <remap from="~output/debug_image_calib" to="image_calib"/>
 
@@ -18,7 +18,7 @@
             sensorrobot: azure_kinect
             sensorname: rgb_camera
             viewer: qtosg
-            controllerargs: ""
+            controllerargs: "rosrobotcontroller /denso/position_trajectory_controller/follow_joint_trajectory /denso/joint_states 8 j1 j2 j3 j4 j5 j6"
         </rosparam>
     </node>
 </launch>

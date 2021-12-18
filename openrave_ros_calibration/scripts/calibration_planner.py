@@ -159,7 +159,7 @@ class CalibrationTaskController(object):
 
         params.filterByArea = True
         params.minArea = 180
-        params.maxArea = 2500
+        params.maxArea = 10000
 
         params.minDistBetweenBlobs = 20
 
@@ -256,9 +256,14 @@ if __name__ == '__main__':
     tiltangle = np.deg2rad(30)
     qaxistilters = np.array([quatFromAxisAngle(np.array([np.cos(i*2*np.pi/numconedir), np.sin(i*2*np.pi/numconedir), 0])*tiltangle) for i in range(numconedir)])
     conedirangles = quatArrayTRotate(qaxistilters, np.array([0,0,1]))
-    rospy.loginfo('computing poses')
-    poses, configs = self.compute_poses(dists=np.arange(0.03,1.5,0.2), orientationdensity=5, conedirangles=conedirangles, num=np.inf)
-    # poses, configs = load_poses('/workspace/denso_calib_poses.pkl')
+
+    precomputed_poses = rospy.get_param('~precomputed_poses_file', None)
+    if precomputed_poses is not None:
+        rospy.loginfo('loading poses')
+        poses, configs = load_poses(precomputed_poses)
+    else:
+        rospy.loginfo('computing poses')
+        poses, configs = self.compute_poses(dists=np.arange(0.03,1.5,0.2), orientationdensity=5, conedirangles=conedirangles, num=np.inf)
     numobservations = 100
     indices = np.random.choice(len(poses), numobservations, replace=False)
     graphs = self.calibplanner.calibrationviews.visualizePoses(poses[indices])

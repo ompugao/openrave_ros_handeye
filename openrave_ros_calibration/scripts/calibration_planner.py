@@ -128,7 +128,7 @@ class CalibrationTaskController(object):
         for pose, config in zip(poses, configs):
             self.calibplanner.moveTo(config)
             # wait for vibration deminishing...
-            time.sleep(1.0)
+            time.sleep(3.0)
 
             img, cam_info = self.get_image()
             Tpattern_in_camera = self.capture_corners(img, cam_info, checkerboard=checkerboard, pointdist=pointdist)
